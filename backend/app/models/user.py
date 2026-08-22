@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import String, Boolean, DateTime
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 
@@ -26,3 +26,12 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+    # Relationship to candidate profile
+    profile = relationship(
+        "CandidateProfile", 
+        back_populates="user", 
+        uselist=False, 
+        cascade="all, delete-orphan"
+    )
+
