@@ -8,6 +8,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.db.session import get_db
 from app.utils.redis import verify_redis_connection
+from app.api.routes import router as api_router
 
 # Configure Logging
 logging.basicConfig(
@@ -45,6 +46,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(api_router, prefix=settings.API_V1_STR, tags=["Platform"])
 
 
 

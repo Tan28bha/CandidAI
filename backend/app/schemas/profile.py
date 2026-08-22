@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field
 
 
 class ProfileBase(BaseModel):
@@ -10,7 +10,7 @@ class ProfileBase(BaseModel):
     bio: Optional[str] = None
     current_title: Optional[str] = None
     years_of_experience: Optional[int] = 0
-    skills: Optional[List[str]] = []
+    skills: Optional[List[str]] = Field(default_factory=list)
     linkedin_url: Optional[str] = None
     github_url: Optional[str] = None
 

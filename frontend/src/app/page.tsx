@@ -1,231 +1,52 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { getApiHealth, getDbHealth, getRedisHealth, HealthResponse } from "../lib/api";
+import { FormEvent, useEffect, useState } from "react";
+import { createInterview, Difficulty, getApiHealth, InterviewType, registerAndLogin } from "../lib/api";
 
-type ConnectionStatus = "checking" | "connected" | "failed";
+const modes: { value: InterviewType; title: string; description: string; icon: string }[] = [
+  { value: "technical", title: "Technical", description: "Practical engineering depth", icon: "</>" },
+  { value: "dsa", title: "DSA", description: "Algorithms & problem solving", icon: "{}" },
+  { value: "system_design", title: "System design", description: "Architecture & tradeoffs", icon: "◫" },
+  { value: "behavioral", title: "Behavioral", description: "Leadership & communication", icon: "✦" },
+];
+const focusOptions = ["React", "Python", "Databases", "APIs", "Leadership", "Distributed systems"];
 
 export default function Home() {
-  const [apiStatus, setApiStatus] = useState<ConnectionStatus>("checking");
-  const [dbStatus, setDbStatus] = useState<ConnectionStatus>("checking");
-  const [redisStatus, setRedisStatus] = useState<ConnectionStatus>("checking");
+  const [mode, setMode] = useState<InterviewType>("technical");
+  const [difficulty, setDifficulty] = useState<Difficulty>("mid");
+  const [role, setRole] = useState("Software Engineer");
+  const [duration, setDuration] = useState(45);
+  const [focus, setFocus] = useState<string[]>(["React", "APIs"]);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [apiOnline, setApiOnline] = useState<boolean | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const [apiDetails, setApiDetails] = useState<HealthResponse | null>(null);
-  const [dbDetails, setDbDetails] = useState<HealthResponse | null>(null);
-  const [redisDetails, setRedisDetails] = useState<HealthResponse | null>(null);
+  useEffect(() => { getApiHealth().then(() => setApiOnline(true)).catch(() => setApiOnline(false)); }, []);
+  const toggleFocus = (area: string) => setFocus((current) => current.includes(area) ? current.filter((item) => item !== area) : [...current, area]);
 
-  const checkConnections = async () => {
-    setApiStatus("checking");
-    setDbStatus("checking");
-    setRedisStatus("checking");
-
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setError(null); setResult(null);
+    if (!name || !email || password.length < 6) { setError("Add your name, email, and a password of at least 6 characters."); return; }
+    setSubmitting(true);
     try {
-      const apiRes = await getApiHealth();
-      setApiStatus("connected");
-      setApiDetails(apiRes);
-    } catch (err) {
-      setApiStatus("failed");
-      setApiDetails(null);
-    }
-
-    try {
-      const dbRes = await getDbHealth();
-      setDbStatus("connected");
-      setDbDetails(dbRes);
-    } catch (err) {
-      setDbStatus("failed");
-      setDbDetails(null);
-    }
-
-    try {
-      const redisRes = await getRedisHealth();
-      setRedisStatus("connected");
-      setRedisDetails(redisRes);
-    } catch (err) {
-      setRedisStatus("failed");
-      setRedisDetails(null);
-    }
+      const token = await registerAndLogin(email, password, name);
+      const interview = await createInterview(token, { interview_type: mode, target_role: role, difficulty, duration_minutes: duration, focus_areas: focus });
+      setResult(`Session ready — ${interview.duration_minutes} minutes of ${interview.interview_type.replace("_", " ")} practice.`);
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again."); }
+    finally { setSubmitting(false); }
   };
 
-  useEffect(() => {
-    checkConnections();
-  }, []);
-
-  const getStatusBadge = (status: ConnectionStatus) => {
-    switch (status) {
-      case "checking":
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-400/10 text-amber-400 border border-amber-400/20">
-            <span className="w-2 h-2 mr-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-            Checking
-          </span>
-        );
-      case "connected":
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">
-            <span className="w-2 h-2 mr-1.5 rounded-full bg-emerald-400"></span>
-            Connected
-          </span>
-        );
-      case "failed":
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-400/10 text-rose-400 border border-rose-400/20">
-            <span className="w-2 h-2 mr-1.5 rounded-full bg-rose-400"></span>
-            Disconnected
-          </span>
-        );
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500/30">
-      {/* Background Gradients */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[40%] -left-[20%] w-[80%] h-[80%] rounded-full bg-indigo-900/15 blur-[120px]" />
-        <div className="absolute top-[20%] -right-[20%] w-[60%] h-[60%] rounded-full bg-purple-900/10 blur-[100px]" />
-      </div>
-
-      {/* Header */}
-      <header className="relative border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-md z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
-              A
-            </div>
-            <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-350 bg-clip-text text-transparent">
-              Antigravity Interviewer
-            </span>
-          </div>
-          <div className="flex items-center space-x-4">
-            <a
-              href="http://localhost:8000/docs"
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
-            >
-              API Reference
-            </a>
-            <button
-              onClick={checkConnections}
-              className="inline-flex items-center justify-center px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 active:bg-indigo-700 transition duration-200 shadow-md shadow-indigo-600/20"
-            >
-              Recheck System
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="relative flex-1 max-w-7xl mx-auto px-6 py-12 w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center z-10">
-        
-        {/* Intro Info */}
-        <section className="lg:col-span-7 flex flex-col space-y-6">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 w-fit">
-            <span className="text-xs font-semibold uppercase tracking-wider">Phase 1 Setup Active</span>
-          </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight lg:leading-none">
-            Simulate Realistic technical <br className="hidden md:inline" />
-            Interviews with <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">Stateful AI Agents</span>
-          </h1>
-          <p className="text-lg text-slate-400 max-w-xl">
-            Antigravity Interviewer uses an orchestration of supervisor, planner, interviewer, and evaluator agents powered by LangGraph to assess resumes, dynamically adjust difficulties, probe weaknesses, and output full skill analysis.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-            <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm">
-              <h3 className="font-semibold text-slate-200 text-sm mb-1">Stateful Graph Flow</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Manages complete context dynamically without simple, context-free chatbot loops.
-              </p>
-            </div>
-            <div className="p-4 rounded-2xl bg-slate-900/50 border border-slate-800 backdrop-blur-sm">
-              <h3 className="font-semibold text-slate-200 text-sm mb-1">Double Probe Validation</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Tailors follow-ups on user answers to explore technical boundaries, tradeoffs, and failure modes.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Integration Status Panel */}
-        <section className="lg:col-span-5 w-full flex flex-col space-y-4">
-          <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 backdrop-blur-md shadow-2xl">
-            <h2 className="text-xl font-bold mb-4 text-white">System Integration Status</h2>
-            <p className="text-sm text-slate-400 mb-6 leading-relaxed">
-              Verify communication tunnels between the client, the Python gateway, and database servers.
-            </p>
-
-            <div className="space-y-4">
-              {/* API Connection */}
-              <div className="flex flex-col space-y-2 p-3 rounded-xl bg-slate-950 border border-slate-800/80">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm text-slate-355">FastAPI Backend</span>
-                  {getStatusBadge(apiStatus)}
-                </div>
-                {apiStatus === "connected" && apiDetails && (
-                  <p className="text-xs text-slate-500 font-mono">
-                    Project: {apiDetails.project} | v{apiDetails.version}
-                  </p>
-                )}
-                {apiStatus === "failed" && (
-                  <p className="text-xs text-rose-400/80 font-mono">
-                    Unable to reach host http://localhost:8000
-                  </p>
-                )}
-              </div>
-
-              {/* DB Connection */}
-              <div className="flex flex-col space-y-2 p-3 rounded-xl bg-slate-950 border border-slate-800/80">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm text-slate-355">PostgreSQL (pgvector)</span>
-                  {getStatusBadge(dbStatus)}
-                </div>
-                {dbStatus === "connected" && dbDetails && (
-                  <p className="text-xs text-slate-500 font-mono">
-                    {dbDetails.message}
-                  </p>
-                )}
-                {dbStatus === "failed" && (
-                  <p className="text-xs text-rose-400/80 font-mono">
-                    Postgres service offline or host connection failure
-                  </p>
-                )}
-              </div>
-
-              {/* Redis Connection */}
-              <div className="flex flex-col space-y-2 p-3 rounded-xl bg-slate-950 border border-slate-800/80">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm text-slate-355">Redis Cache</span>
-                  {getStatusBadge(redisStatus)}
-                </div>
-                {redisStatus === "connected" && redisDetails && (
-                  <p className="text-xs text-slate-500 font-mono">
-                    {redisDetails.message}
-                  </p>
-                )}
-                {redisStatus === "failed" && (
-                  <p className="text-xs text-rose-400/80 font-mono">
-                    Redis service offline or keyval check timeout
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <button
-              onClick={checkConnections}
-              className="mt-6 w-full py-2.5 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-700 active:bg-slate-900 border border-slate-700/50 hover:border-slate-650 transition duration-150"
-            >
-              Force Refetch Status
-            </button>
-          </div>
-        </section>
-
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950/80 text-center py-6 text-xs text-slate-500">
-        <p>&copy; 2026 Antigravity Multi-Agent AI Interview Platform. All rights reserved.</p>
-      </footer>
-    </div>
-  );
+  return <main className="min-h-screen bg-[#08111f] text-slate-100 selection:bg-cyan-300/30">
+    <div className="pointer-events-none fixed inset-0 overflow-hidden"><div className="absolute -top-32 left-1/4 h-96 w-96 rounded-full bg-cyan-500/10 blur-[120px]" /><div className="absolute right-0 top-1/3 h-96 w-96 rounded-full bg-indigo-600/15 blur-[140px]" /></div>
+    <header className="relative mx-auto flex max-w-6xl items-center justify-between px-6 py-6"><div className="flex items-center gap-3 font-semibold tracking-tight"><div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-cyan-300 to-indigo-500 text-lg text-slate-950 shadow-lg shadow-cyan-500/20">A</div><span>Antigravity</span><span className="text-slate-500">Interviewer</span></div><div className="flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-400"><span className={`h-2 w-2 rounded-full ${apiOnline === true ? "bg-emerald-400" : apiOnline === false ? "bg-rose-400" : "animate-pulse bg-amber-300"}`} />{apiOnline === true ? "Platform online" : apiOnline === false ? "Platform offline" : "Checking platform"}</div></header>
+    <section className="relative mx-auto max-w-6xl px-6 pb-16 pt-10"><div className="max-w-3xl"><p className="mb-4 text-sm font-semibold uppercase tracking-[0.22em] text-cyan-300">Practice with intent</p><h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">Your next interview deserves more than a question bank.</h1><p className="mt-5 max-w-2xl text-lg leading-8 text-slate-400">Configure a focused mock interview. The agent will adapt to your answers, probe your reasoning, and build a signal-rich practice session around your goals.</p></div>
+      <form onSubmit={submit} className="mt-12 grid gap-6 lg:grid-cols-[1.3fr_.7fr]"><section className="rounded-3xl border border-slate-700/60 bg-slate-900/55 p-6 shadow-2xl shadow-black/20 backdrop-blur sm:p-8"><div className="mb-7 flex items-center justify-between"><h2 className="text-xl font-semibold">Build your session</h2><span className="text-sm text-slate-500">01 — Setup</span></div><label className="text-sm font-medium text-slate-300">Interview format</label><div className="mt-3 grid gap-3 sm:grid-cols-2">{modes.map((item) => <button key={item.value} type="button" onClick={() => setMode(item.value)} className={`rounded-2xl border p-4 text-left transition ${mode === item.value ? "border-cyan-300 bg-cyan-300/10" : "border-slate-700 bg-slate-950/30 hover:border-slate-500"}`}><span className="text-lg text-cyan-300">{item.icon}</span><p className="mt-2 font-medium">{item.title}</p><p className="mt-1 text-xs text-slate-500">{item.description}</p></button>)}</div>
+        <div className="mt-7 grid gap-6 sm:grid-cols-2"><label className="text-sm font-medium text-slate-300">Target role<input value={role} onChange={(event) => setRole(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm outline-none focus:border-cyan-300" /></label><div><p className="text-sm font-medium text-slate-300">Level</p><div className="mt-2 grid grid-cols-3 rounded-xl bg-slate-950 p-1">{(["junior", "mid", "senior"] as Difficulty[]).map((item) => <button key={item} type="button" onClick={() => setDifficulty(item)} className={`rounded-lg py-2 text-xs capitalize ${difficulty === item ? "bg-slate-700 text-white" : "text-slate-500"}`}>{item}</button>)}</div></div></div>
+        <div className="mt-7"><div className="flex justify-between text-sm"><label className="font-medium text-slate-300">Session length</label><span className="text-cyan-300">{duration} min</span></div><input aria-label="Session length" type="range" min="15" max="90" step="15" value={duration} onChange={(event) => setDuration(Number(event.target.value))} className="mt-4 w-full accent-cyan-300" /></div><div className="mt-7"><p className="text-sm font-medium text-slate-300">Focus areas <span className="font-normal text-slate-500">(optional)</span></p><div className="mt-3 flex flex-wrap gap-2">{focusOptions.map((area) => <button key={area} type="button" onClick={() => toggleFocus(area)} className={`rounded-full border px-3 py-1.5 text-xs transition ${focus.includes(area) ? "border-cyan-300 bg-cyan-300/10 text-cyan-200" : "border-slate-700 text-slate-400"}`}>{area}</button>)}</div></div></section>
+        <aside className="rounded-3xl border border-slate-700/60 bg-[#0d1a2c] p-6 shadow-2xl shadow-black/20 sm:p-8"><p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-300">02 — Start</p><h2 className="mt-3 text-2xl font-semibold">Save your practice plan</h2><p className="mt-3 text-sm leading-6 text-slate-400">Create a candidate account to save this session and receive tailored feedback.</p><div className="mt-6 space-y-4"><label className="block text-sm text-slate-300">Your name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ada Lovelace" className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-3 text-sm outline-none placeholder:text-slate-600 focus:border-cyan-300" /></label><label className="block text-sm text-slate-300">Email<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="you@example.com" className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-3 text-sm outline-none placeholder:text-slate-600 focus:border-cyan-300" /></label><label className="block text-sm text-slate-300">Password<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="At least 6 characters" className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-3 text-sm outline-none placeholder:text-slate-600 focus:border-cyan-300" /></label></div>{error && <p className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p>}{result && <p className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-200">{result}</p>}<button disabled={submitting || apiOnline === false} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-300 to-indigo-400 px-4 py-3 font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">{submitting ? "Creating your session…" : "Create interview session →"}</button><p className="mt-4 text-center text-xs leading-5 text-slate-500">Your configuration is saved to your candidate profile. No calendar commitment required.</p></aside></form></section>
+  </main>;
 }
