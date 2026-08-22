@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Antigravity Interviewer | Multi-Agent AI Interview Platform",
+  title: "CandidAI | Multi-Agent AI Interview Platform",
   description: "Simulate technical, behavioral, and system design interviews using stateful, cooperative AI agents built on LangGraph.",
 };
 

@@ -1,15 +1,16 @@
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.interview import InterviewSession
+from app.models.interview import InterviewSession, InterviewTurn
 from app.models.profile import CandidateProfile
 from app.models.user import User
-from app.schemas.interview import InterviewCreate, InterviewResponse
+from app.schemas.interview import AnswerCreate, AnswerResult, InterviewCreate, InterviewDetail, InterviewResponse
+from app.services.interview_engine import evaluate_answer, question_for
 from app.schemas.profile import ProfileResponse, ProfileUpdate
 from app.schemas.user import Token, UserLogin, UserRegister, UserResponse
 from app.utils.security import create_access_token, hash_password, verify_password
@@ -83,3 +84,65 @@ def list_interviews(current_user: User = Depends(get_current_user), db: Session 
         .order_by(InterviewSession.created_at.desc())
         .all()
     )
+
+
+def get_owned_interview(interview_id: str, current_user: User, db: Session) -> InterviewSession:
+    interview = (
+        db.query(InterviewSession)
+        .options(selectinload(InterviewSession.turns))
+        .filter(InterviewSession.id == interview_id, InterviewSession.user_id == current_user.id)
+        .first()
+    )
+    if not interview:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview session not found")
+    return interview
+
+
+def question_limit(duration_minutes: int) -> int:
+    return 3 if duration_minutes <= 30 else 4 if duration_minutes <= 60 else 5
+
+
+@router.get("/interviews/{interview_id}", response_model=InterviewDetail)
+def get_interview(interview_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return get_owned_interview(interview_id, current_user, db)
+
+
+@router.post("/interviews/{interview_id}/start", response_model=InterviewDetail)
+def start_interview(interview_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    interview = get_owned_interview(interview_id, current_user, db)
+    if interview.status == "COMPLETED":
+        raise HTTPException(status_code=409, detail="This interview is already complete")
+    if not interview.turns:
+        interview.status = "ACTIVE"
+        db.add(InterviewTurn(session_id=interview.id, turn_number=1, question=question_for(interview, 1)))
+        db.commit()
+    return get_owned_interview(interview_id, current_user, db)
+
+
+@router.post("/interviews/{interview_id}/answers", response_model=AnswerResult)
+def submit_answer(
+    interview_id: str,
+    payload: AnswerCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    interview = get_owned_interview(interview_id, current_user, db)
+    if interview.status != "ACTIVE":
+        raise HTTPException(status_code=409, detail="Start this interview before submitting an answer")
+    current_turn = next((turn for turn in sorted(interview.turns, key=lambda item: item.turn_number) if not turn.answer), None)
+    if not current_turn:
+        raise HTTPException(status_code=409, detail="There is no question awaiting an answer")
+
+    current_turn.answer = payload.answer.strip()
+    current_turn.score, current_turn.feedback = evaluate_answer(current_turn.answer)
+    next_turn = None
+    if current_turn.turn_number >= question_limit(interview.duration_minutes):
+        interview.status = "COMPLETED"
+    else:
+        number = current_turn.turn_number + 1
+        next_turn = InterviewTurn(session_id=interview.id, turn_number=number, question=question_for(interview, number))
+        db.add(next_turn)
+    db.commit()
+    refreshed = get_owned_interview(interview_id, current_user, db)
+    next_question = next((turn for turn in refreshed.turns if turn.answer is None), None)
+    return AnswerResult(session=refreshed, next_question=next_question)

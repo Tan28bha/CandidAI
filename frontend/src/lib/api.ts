@@ -25,6 +25,25 @@ export interface InterviewResponse extends InterviewCreate {
   created_at: string;
 }
 
+export interface InterviewTurn {
+  id: string;
+  turn_number: number;
+  question: string;
+  answer: string | null;
+  feedback: string | null;
+  score: number | null;
+  created_at: string;
+}
+
+export interface InterviewDetail extends InterviewResponse {
+  turns: InterviewTurn[];
+}
+
+export interface AnswerResult {
+  session: InterviewDetail;
+  next_question: InterviewTurn | null;
+}
+
 /**
  * Generic fetch helper with error handling
  */
@@ -76,6 +95,14 @@ export async function registerAndLogin(email: string, password: string, fullName
 
 export function createInterview(token: string, payload: InterviewCreate): Promise<InterviewResponse> {
   return authenticatedFetch<InterviewResponse>("/interviews", token, payload);
+}
+
+export function startInterview(token: string, interviewId: string): Promise<InterviewDetail> {
+  return authenticatedFetch<InterviewDetail>(`/interviews/${interviewId}/start`, token, {});
+}
+
+export function submitAnswer(token: string, interviewId: string, answer: string): Promise<AnswerResult> {
+  return authenticatedFetch<AnswerResult>(`/interviews/${interviewId}/answers`, token, { answer });
 }
 
 /**
