@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -15,6 +16,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    logger.info("Starting up FastAPI application...")
+    yield
+    # Shutdown logic
+    logger.info("Shutting down FastAPI application...")
+
+
 # Initialize FastAPI App
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -22,6 +33,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # CORS Configuration
@@ -34,16 +46,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Starting up FastAPI application...")
-    # Add any startup logic (e.g. seeding db or pre-heating caches) here
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("Shutting down FastAPI application...")
 
 
 # Base API Routes
