@@ -21,6 +21,8 @@ passlib[bcrypt]>=1.7.4
 
 # AI & LLM Engine
 langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-google-genai>=2.0.0
 langgraph>=0.0.26
 google-generativeai>=0.3.0
 

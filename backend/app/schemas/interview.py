@@ -15,6 +15,7 @@ class InterviewCreate(BaseModel):
 class InterviewResponse(InterviewCreate):
     id: uuid.UUID
     status: str
+    summary: str | None = None
     created_at: datetime
 
     class Config:

@@ -20,6 +20,7 @@ class InterviewSession(Base):
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     focus_areas: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="READY", nullable=False)
+    summary: Mapped[str | None] = mapped_column(String(4000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     turns = relationship("InterviewTurn", back_populates="session", cascade="all, delete-orphan")
 
