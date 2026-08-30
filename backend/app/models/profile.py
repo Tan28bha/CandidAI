@@ -42,6 +42,8 @@ class CandidateProfile(Base):
     skills: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list, nullable=True)
     linkedin_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     github_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    interview_plan: Mapped[Optional[dict]] = mapped_column(JSON, default=dict, nullable=True)
+
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

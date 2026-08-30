@@ -19,13 +19,29 @@ logging.basicConfig(
 logger = logging.getLogger("main")
 
 
+from app.db.session import SessionLocal
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
     logger.info("Starting up FastAPI application...")
+    
+    # Self-healing database: Ensure interview_plan column exists in candidate_profiles
+    try:
+        db = SessionLocal()
+        db.execute(text("ALTER TABLE candidate_profiles ADD COLUMN interview_plan JSON"))
+        db.commit()
+        logger.info("Database self-healing: added column interview_plan to candidate_profiles.")
+    except Exception:
+        # Col already exists or postgreSQL handles schema differently
+        pass
+    finally:
+        db.close()
+        
     yield
     # Shutdown logic
     logger.info("Shutting down FastAPI application...")
+
 
 
 # Initialize FastAPI App

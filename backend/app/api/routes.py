@@ -18,8 +18,10 @@ from app.schemas.user import Token, UserLogin, UserRegister, UserResponse
 from app.services.interview_engine import question_for
 from app.services.interview_helpers import get_owned_interview, submit_turn
 from app.services.resume_service import extract_text_from_pdf, chunk_text, generate_embeddings_for_chunks, save_resume_chunks
+from app.services.resume_agents import run_resume_analysis_agents
 from app.llm.provider import get_chat_model, llm_available
 from app.utils.security import create_access_token, hash_password, verify_password
+
 
 logger = logging.getLogger("routes")
 
@@ -112,43 +114,23 @@ async def upload_resume(
     
     if llm_available():
         try:
-            llm = get_chat_model()
-            system_prompt = (
-                "You are an expert resume parser. Analyze the resume text and extract the candidate's professional profile.\n"
-                "Provide the result as a raw JSON object containing these keys (use null or empty list if not found):\n"
-                " - current_title: string (e.g. 'Senior Frontend Engineer')\n"
-                " - years_of_experience: integer (e.g. 5)\n"
-                " - skills: list of strings (e.g. ['React', 'TypeScript', 'Node.js'])\n"
-                " - bio: string (a short professional summary, maximum 150 words)\n"
-                "Return ONLY the raw JSON object, without markdown formatting or code blocks."
-            )
-            response = llm.invoke([
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=f"Resume Text:\n{text[:8000]}")
-            ])
-            raw_content = response.content.strip()
-            if raw_content.startswith("```json"):
-                raw_content = raw_content[7:]
-            if raw_content.startswith("```"):
-                raw_content = raw_content[3:]
-            if raw_content.endswith("```"):
-                raw_content = raw_content[:-3]
-            raw_content = raw_content.strip()
+            analysis = run_resume_analysis_agents(text)
+            extracted = analysis["profile"]
             
-            extracted = json.loads(raw_content)
-            
-            if isinstance(extracted, dict):
-                if extracted.get("current_title"):
-                    profile.current_title = extracted["current_title"]
-                if isinstance(extracted.get("years_of_experience"), int):
-                    profile.years_of_experience = extracted["years_of_experience"]
-                if isinstance(extracted.get("skills"), list):
-                    profile.skills = [str(s) for s in extracted["skills"]]
-                if extracted.get("bio"):
-                    profile.bio = extracted["bio"]
-                    
-                db.commit()
-                db.refresh(profile)
+            if extracted.get("current_title"):
+                profile.current_title = extracted["current_title"]
+            if isinstance(extracted.get("years_of_experience"), int):
+                profile.years_of_experience = extracted["years_of_experience"]
+            if isinstance(extracted.get("skills"), list):
+                profile.skills = [str(s) for s in extracted["skills"]]
+            if extracted.get("bio"):
+                profile.bio = extracted["bio"]
+                
+            if analysis.get("interview_plan"):
+                profile.interview_plan = analysis["interview_plan"]
+                
+            db.commit()
+            db.refresh(profile)
         except Exception as exc:
             logger.warning("Failed to auto-enrich candidate profile from resume: %s", exc)
             
@@ -156,13 +138,31 @@ async def upload_resume(
 
 
 
+
 @router.post("/interviews", response_model=InterviewResponse, status_code=status.HTTP_201_CREATED)
 def create_interview(payload: InterviewCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    interview = InterviewSession(user_id=current_user.id, **payload.model_dump())
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
+    data = payload.model_dump()
+    
+    # Enrich session using Architect Agent suggestions if available
+    if profile and profile.interview_plan and isinstance(profile.interview_plan, dict):
+        plan = profile.interview_plan
+        recommended_focus = plan.get("recommended_focus_areas") or []
+        if recommended_focus:
+            data["focus_areas"] = list(set(data.get("focus_areas", []) + recommended_focus))
+            
+        if plan.get("suggested_difficulty") and (data.get("difficulty") == "mid" or not data.get("difficulty")):
+            data["difficulty"] = plan["suggested_difficulty"]
+            
+        if plan.get("suggested_role") and (data.get("target_role") == "Software Engineer" or not data.get("target_role")):
+            data["target_role"] = plan["suggested_role"]
+
+    interview = InterviewSession(user_id=current_user.id, **data)
     db.add(interview)
     db.commit()
     db.refresh(interview)
     return interview
+
 
 
 @router.get("/interviews", response_model=list[InterviewResponse])

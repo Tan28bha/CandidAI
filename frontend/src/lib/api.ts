@@ -138,9 +138,25 @@ export function getProfile(token: string): Promise<ProfileResponse> {
   return authenticatedFetch<ProfileResponse>("/profile", token, "GET");
 }
 
+export async function loginCandidate(email: string, password: string): Promise<string> {
+  const loginResponse = await fetch(`${API_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!loginResponse.ok) {
+    const error = await loginResponse.json().catch(() => null);
+    throw new Error(error?.detail || "Invalid email or password");
+  }
+  const result = await loginResponse.json() as { access_token: string };
+  return result.access_token;
+}
+
+
 export function updateProfile(token: string, payload: Partial<ProfileResponse>): Promise<ProfileResponse> {
   return authenticatedFetch<ProfileResponse>("/profile", token, "PUT", payload);
 }
+
 
 export async function uploadResume(token: string, file: File): Promise<ProfileResponse> {
   const formData = new FormData();

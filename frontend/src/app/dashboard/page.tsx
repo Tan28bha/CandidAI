@@ -64,14 +64,16 @@ export default function Dashboard() {
       router.push("/");
       return;
     }
-    setToken(storedToken);
+    const activeToken = storedToken;
+    setToken(activeToken);
 
     async function loadData() {
       try {
         const [profData, intData] = await Promise.all([
-          getProfile(storedToken),
-          listInterviews(storedToken)
+          getProfile(activeToken),
+          listInterviews(activeToken)
         ]);
+
         setProfile(profData);
         setInterviews(intData);
         

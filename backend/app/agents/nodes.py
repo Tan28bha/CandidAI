@@ -5,9 +5,12 @@ from app.agents.state import AgentState
 from app.llm.provider import get_chat_model
 from app.prompts.evaluator import EVALUATOR_SYSTEM, EVALUATOR_USER
 from app.prompts.interviewer import (
-    INTERVIEWER_SYSTEM,
     INTERVIEWER_USER_FOLLOWUP,
     INTERVIEWER_USER_INITIAL,
+    DSA_AGENT_PROMPT,
+    SYSTEM_DESIGN_AGENT_PROMPT,
+    BEHAVIORAL_AGENT_PROMPT,
+    TECHNICAL_AGENT_PROMPT,
 )
 from app.db.session import SessionLocal
 from app.models.profile import CandidateProfile
@@ -51,11 +54,24 @@ def _get_resume_context(session: dict) -> str:
         for i, chunk in enumerate(chunks, 1):
             context += f"Excerpt {i}: {chunk}\n"
         context += "Refer to these resume details naturally when starting or probing, but do not list or recite them directly.\n"
+        
+        # Inject custom Architect-designed tailored questions if available
+        if profile.interview_plan and isinstance(profile.interview_plan, dict):
+            plan = profile.interview_plan
+            tailored_qs = plan.get("tailored_questions")
+            if tailored_qs:
+                context += "\nCustom Interview Blueprint (Architect Agent Designed):\n"
+                context += "Suggested Custom Questions/Focus Prompts to test candidate's real-world claims:\n"
+                for i, q in enumerate(tailored_qs, 1):
+                    context += f" - Blueprint Question {i}: {q}\n"
+                context += "Steer the interview questions toward these project claims and ask the candidate to elaborate on them.\n"
+                
         return context
     except Exception:
         return ""
     finally:
         db.close()
+
 
 
 def _format_prior_turns(turns: list[dict]) -> str:
@@ -76,8 +92,19 @@ def build_interviewer_messages(state: AgentState) -> list:
     turn_number = state.get("turn_number", 1)
     prior = state.get("prior_turns") or []
     
+    interview_type = state["session"].get("interview_type")
+    if interview_type == "dsa":
+        agent_prompt = DSA_AGENT_PROMPT.format(**labels)
+    elif interview_type == "system_design":
+        agent_prompt = SYSTEM_DESIGN_AGENT_PROMPT.format(**labels)
+    elif interview_type == "behavioral":
+        agent_prompt = BEHAVIORAL_AGENT_PROMPT.format(**labels)
+    else:
+        agent_prompt = TECHNICAL_AGENT_PROMPT.format(**labels)
+        
     resume_context = _get_resume_context(state["session"])
-    system = SystemMessage(content=INTERVIEWER_SYSTEM.format(**labels) + resume_context)
+    system = SystemMessage(content=agent_prompt + resume_context)
+
 
     if turn_number == 1 and not prior:
         user = HumanMessage(content=INTERVIEWER_USER_INITIAL)
