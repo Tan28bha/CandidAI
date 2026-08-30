@@ -12,13 +12,21 @@ def question_limit(duration_minutes: int) -> int:
     return 3 if duration_minutes <= 30 else 4 if duration_minutes <= 60 else 5
 
 
+import uuid
+
 def get_owned_interview(interview_id: str, current_user: User, db: Session) -> InterviewSession:
+    try:
+        session_uuid = uuid.UUID(interview_id)
+    except ValueError:
+        raise ValueError("Interview session not found")
+        
     interview = (
         db.query(InterviewSession)
         .options(selectinload(InterviewSession.turns))
-        .filter(InterviewSession.id == interview_id, InterviewSession.user_id == current_user.id)
+        .filter(InterviewSession.id == session_uuid, InterviewSession.user_id == current_user.id)
         .first()
     )
+
     if not interview:
         raise ValueError("Interview session not found")
     return interview

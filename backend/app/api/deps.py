@@ -35,9 +35,20 @@ def _decode_token(token: str) -> TokenPayload:
         raise credentials_exception
 
 
+import uuid
+
 def get_user_from_token(token: str, db: Session) -> User:
     token_data = _decode_token(token)
-    user = db.query(User).filter(User.id == token_data.sub).first()
+    try:
+        user_uuid = uuid.UUID(token_data.sub)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = db.query(User).filter(User.id == user_uuid).first()
+
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     if not user.is_active:
