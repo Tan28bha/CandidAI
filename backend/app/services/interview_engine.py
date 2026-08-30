@@ -52,7 +52,9 @@ def _session_context(session: InterviewSession) -> SessionContext:
         target_role=session.target_role,
         difficulty=session.difficulty,
         focus_areas=list(session.focus_areas or []),
+        user_id=str(session.user_id),
     )
+
 
 
 def _prior_turns(session: InterviewSession) -> list[PriorTurn]:

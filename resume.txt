@@ -1,0 +1,6 @@
+Ada Lovelace
+Senior Frontend Engineer
+Location: Remote, US
+Experience: 6 years
+Skills: React, TypeScript, Redux, Node.js, WebSockets, HTML5, CSS3, Jest.
+Bio: Passionate engineer focused on building highly responsive and reactive web applications using modern Javascript technologies.

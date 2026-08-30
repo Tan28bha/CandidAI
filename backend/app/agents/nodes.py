@@ -9,6 +9,9 @@ from app.prompts.interviewer import (
     INTERVIEWER_USER_FOLLOWUP,
     INTERVIEWER_USER_INITIAL,
 )
+from app.db.session import SessionLocal
+from app.models.profile import CandidateProfile
+from app.services.resume_service import search_matching_chunks
 
 
 class EvaluationResult(BaseModel):
@@ -25,6 +28,34 @@ def _session_labels(session: dict) -> dict[str, str]:
         "difficulty": session["difficulty"],
         "focus_areas": focus,
     }
+
+
+def _get_resume_context(session: dict) -> str:
+    user_id = session.get("user_id")
+    if not user_id:
+        return ""
+    focus_areas = session.get("focus_areas") or []
+    
+    db = SessionLocal()
+    try:
+        profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user_id).first()
+        if not profile:
+            return ""
+        
+        query = " ".join(focus_areas) if focus_areas else session.get("target_role", "")
+        chunks = search_matching_chunks(db, profile.id, query, limit=2)
+        if not chunks:
+            return ""
+            
+        context = "\n\nCandidate's Resume Excerpts (use these to customize questions and ask about specific projects/technologies mentioned):\n"
+        for i, chunk in enumerate(chunks, 1):
+            context += f"Excerpt {i}: {chunk}\n"
+        context += "Refer to these resume details naturally when starting or probing, but do not list or recite them directly.\n"
+        return context
+    except Exception:
+        return ""
+    finally:
+        db.close()
 
 
 def _format_prior_turns(turns: list[dict]) -> str:
@@ -44,7 +75,10 @@ def build_interviewer_messages(state: AgentState) -> list:
     labels = _session_labels(state["session"])
     turn_number = state.get("turn_number", 1)
     prior = state.get("prior_turns") or []
-    system = SystemMessage(content=INTERVIEWER_SYSTEM.format(**labels))
+    
+    resume_context = _get_resume_context(state["session"])
+    system = SystemMessage(content=INTERVIEWER_SYSTEM.format(**labels) + resume_context)
+
     if turn_number == 1 and not prior:
         user = HumanMessage(content=INTERVIEWER_USER_INITIAL)
     else:
@@ -76,7 +110,18 @@ def interviewer_node(state: AgentState) -> dict:
 def evaluator_node(state: AgentState) -> dict:
     labels = _session_labels(state["session"])
     llm = get_chat_model().with_structured_output(EvaluationResult)
-    system = SystemMessage(content=EVALUATOR_SYSTEM.format(**labels))
+    
+    resume_context = _get_resume_context(state["session"])
+    system_text = EVALUATOR_SYSTEM.format(**labels)
+    if resume_context:
+        system_text += (
+            "\n\nHere are some relevant excerpts from the candidate's resume:\n"
+            f"{resume_context}\n"
+            "Use these details to check if the candidate is describing real projects from their experience "
+            "and evaluate the depth of their answer accordingly."
+        )
+        
+    system = SystemMessage(content=system_text)
     user = HumanMessage(
         content=EVALUATOR_USER.format(
             question=state["current_question"],
@@ -89,3 +134,4 @@ def evaluator_node(state: AgentState) -> dict:
         "feedback": result.feedback,
         "probe_areas": result.probe_areas,
     }
+

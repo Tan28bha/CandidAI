@@ -22,6 +22,7 @@ export interface InterviewCreate {
 export interface InterviewResponse extends InterviewCreate {
   id: string;
   status: string;
+  summary: string | null;
   created_at: string;
 }
 
@@ -57,9 +58,29 @@ async function apiFetch<T>(endpoint: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function authenticatedFetch<T>(endpoint: string, token: string, body?: unknown): Promise<T> {
+export interface ProfileResponse {
+  id: string;
+  user_id: string;
+  phone: string | null;
+  location: string | null;
+  bio: string | null;
+  current_title: string | null;
+  years_of_experience: number;
+  skills: string[];
+  linkedin_url: string | null;
+  github_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+async function authenticatedFetch<T>(
+  endpoint: string,
+  token: string,
+  method: "GET" | "POST" | "PUT" | "DELETE" = "GET",
+  body?: unknown
+): Promise<T> {
   const res = await fetch(`${API_URL}${endpoint}`, {
-    method: body ? "POST" : "GET",
+    method,
     headers: {
       Authorization: `Bearer ${token}`,
       ...(body ? { "Content-Type": "application/json" } : {}),
@@ -94,16 +115,51 @@ export async function registerAndLogin(email: string, password: string, fullName
 }
 
 export function createInterview(token: string, payload: InterviewCreate): Promise<InterviewResponse> {
-  return authenticatedFetch<InterviewResponse>("/interviews", token, payload);
+  return authenticatedFetch<InterviewResponse>("/interviews", token, "POST", payload);
 }
 
 export function startInterview(token: string, interviewId: string): Promise<InterviewDetail> {
-  return authenticatedFetch<InterviewDetail>(`/interviews/${interviewId}/start`, token, {});
+  return authenticatedFetch<InterviewDetail>(`/interviews/${interviewId}/start`, token, "POST", {});
+}
+
+export function getInterview(token: string, interviewId: string): Promise<InterviewDetail> {
+  return authenticatedFetch<InterviewDetail>(`/interviews/${interviewId}`, token, "GET");
 }
 
 export function submitAnswer(token: string, interviewId: string, answer: string): Promise<AnswerResult> {
-  return authenticatedFetch<AnswerResult>(`/interviews/${interviewId}/answers`, token, { answer });
+  return authenticatedFetch<AnswerResult>(`/interviews/${interviewId}/answers`, token, "POST", { answer });
 }
+
+export function listInterviews(token: string): Promise<InterviewResponse[]> {
+  return authenticatedFetch<InterviewResponse[]>("/interviews", token, "GET");
+}
+
+export function getProfile(token: string): Promise<ProfileResponse> {
+  return authenticatedFetch<ProfileResponse>("/profile", token, "GET");
+}
+
+export function updateProfile(token: string, payload: Partial<ProfileResponse>): Promise<ProfileResponse> {
+  return authenticatedFetch<ProfileResponse>("/profile", token, "PUT", payload);
+}
+
+export async function uploadResume(token: string, file: File): Promise<ProfileResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  const res = await fetch(`${API_URL}/profile/resume`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => null);
+    throw new Error(error?.detail || `Upload failed: ${res.status}`);
+  }
+  return res.json() as Promise<ProfileResponse>;
+}
+
 
 /**
  * Fetch general API health status

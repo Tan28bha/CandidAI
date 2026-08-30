@@ -27,7 +27,15 @@ export default function Home() {
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { getApiHealth().then(() => setApiOnline(true)).catch(() => setApiOnline(false)); }, []);
+  useEffect(() => {
+    const token = localStorage.getItem("interview_access_token");
+    if (token) {
+      router.push("/dashboard");
+      return;
+    }
+    getApiHealth().then(() => setApiOnline(true)).catch(() => setApiOnline(false));
+  }, [router]);
+
   const toggleFocus = (area: string) => setFocus((current) => current.includes(area) ? current.filter((item) => item !== area) : [...current, area]);
 
   const submit = async (event: FormEvent) => {

@@ -6,6 +6,8 @@ class SessionContext(TypedDict):
     target_role: str
     difficulty: str
     focus_areas: list[str]
+    user_id: str
+
 
 
 class PriorTurn(TypedDict):

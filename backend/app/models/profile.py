@@ -2,8 +2,27 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import String, Integer, Text, ForeignKey, JSON, DateTime
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
+
+
+class SafeVector(TypeDecorator):
+    """
+    Database-agnostic vector type.
+    Uses native pgvector Vector(768) type on PostgreSQL and falls back to JSON on SQLite.
+    """
+    impl = JSON
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            try:
+                from pgvector.sqlalchemy import Vector
+                return dialect.type_descriptor(Vector(768))
+            except ImportError:
+                pass
+        return dialect.type_descriptor(JSON)
 
 
 class CandidateProfile(Base):
@@ -31,6 +50,23 @@ class CandidateProfile(Base):
 
     # Establish one-to-one relationship back to the user
     user = relationship("User", back_populates="profile")
+    
+    # Relationship to resume chunks
+    resume_chunks = relationship("ResumeChunk", back_populates="candidate_profile", cascade="all, delete-orphan")
 
 
-# We also need to add the reverse relationship in the User model later.
+class ResumeChunk(Base):
+    __tablename__ = "resume_chunks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, default=uuid.uuid4, index=True
+    )
+    candidate_profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("candidate_profiles.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[List[float]] = mapped_column(SafeVector, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    candidate_profile = relationship("CandidateProfile", back_populates="resume_chunks")
+
