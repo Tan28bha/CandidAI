@@ -18,6 +18,7 @@ import {
 import ProfileCard from "../../components/ProfileCard";
 import ResumeUploader from "../../components/ResumeUploader";
 import InterviewHistory from "../../components/InterviewHistory";
+import ResumeInsights from "../../components/ResumeInsights";
 
 const interviewTypes: { value: InterviewType; title: string; description: string; icon: string }[] = [
   { value: "technical", title: "Technical", description: "Practical engineering depth", icon: "</>" },
@@ -26,7 +27,18 @@ const interviewTypes: { value: InterviewType; title: string; description: string
   { value: "behavioral", title: "Behavioral", description: "Leadership & communication", icon: "✦" },
 ];
 
-const focusOptions = ["React", "Python", "Databases", "APIs", "Leadership", "Distributed systems"];
+const focusOptions = [
+  "React",
+  "Python",
+  "Databases",
+  "APIs",
+  "Leadership",
+  "Distributed systems",
+  "TypeScript",
+  "Next.js",
+  "PostgreSQL",
+  "Docker",
+];
 
 export default function Dashboard() {
   const router = useRouter();
@@ -83,6 +95,15 @@ export default function Dashboard() {
         setEditLocation(profData.location || "");
         setEditExp(profData.years_of_experience || 0);
         setEditSkills(profData.skills || []);
+        if (profData.interview_plan?.suggested_role) {
+          setRole(profData.interview_plan.suggested_role);
+        }
+        if (profData.interview_plan?.suggested_difficulty) {
+          setDifficulty(profData.interview_plan.suggested_difficulty);
+        }
+        if (profData.interview_plan?.recommended_focus_areas?.length) {
+          setFocus(profData.interview_plan.recommended_focus_areas.slice(0, 4));
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load dashboard data.");
       } finally {
@@ -141,6 +162,16 @@ export default function Dashboard() {
       setEditExp(updatedProfile.years_of_experience || 0);
       setEditSkills(updatedProfile.skills || []);
       
+      if (updatedProfile.interview_plan?.suggested_role) {
+        setRole(updatedProfile.interview_plan.suggested_role);
+      }
+      if (updatedProfile.interview_plan?.suggested_difficulty) {
+        setDifficulty(updatedProfile.interview_plan.suggested_difficulty);
+      }
+      if (updatedProfile.interview_plan?.recommended_focus_areas?.length) {
+        setFocus(updatedProfile.interview_plan.recommended_focus_areas.slice(0, 4));
+      }
+
       setUploadSuccess("Resume uploaded successfully! Profile auto-enriched by AI.");
       const intData = await listInterviews(token);
       setInterviews(intData);
@@ -306,7 +337,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm font-medium text-slate-300">Focus areas (optional)</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {focusOptions.map((area) => (
+                    {Array.from(new Set([...focusOptions, ...(profile?.interview_plan?.recommended_focus_areas || []), ...focus])).map((area) => (
                       <button
                         key={area}
                         type="button"
@@ -389,6 +420,7 @@ export default function Dashboard() {
               uploading={uploading}
               onUpload={handleResumeUpload}
             />
+            <ResumeInsights profile={profile} />
           </div>
         </div>
       </section>

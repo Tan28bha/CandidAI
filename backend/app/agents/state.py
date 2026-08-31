@@ -29,4 +29,5 @@ class AgentState(TypedDict, total=False):
     probe_areas: list[str]
     next_question: str | None
     generate_next: bool
+    research_notes: str
     mode: Literal["question", "evaluate"]

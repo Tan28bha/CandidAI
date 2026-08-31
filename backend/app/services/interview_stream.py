@@ -8,7 +8,7 @@ from typing import Any
 
 from app.agents.graph import interview_graph
 from app.agents.nodes import stream_interviewer_tokens
-from app.agents.state import PriorTurn, SessionContext
+from app.agents.state import PriorTurn
 from app.llm.provider import llm_available
 from app.models.interview import InterviewSession
 from app.services.interview_engine import (
@@ -18,6 +18,7 @@ from app.services.interview_engine import (
     _prior_turns,
     _session_context,
 )
+from app.services.question_research import research_notes_for_session
 
 
 def _chunk_text(text: str, size: int = 12) -> Iterator[str]:
@@ -85,6 +86,7 @@ async def stream_process_answer(
                 "prior_turns": prior,
                 "turn_number": next_turn_number,
                 "probe_areas": probe_areas,
+                "research_notes": research_notes_for_session(_session_context(session)),
             }
             parts: list[str] = []
             for token in await asyncio.to_thread(lambda: list(stream_interviewer_tokens(stream_state))):

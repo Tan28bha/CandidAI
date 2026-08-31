@@ -22,6 +22,7 @@ class ProfileUpdate(ProfileBase):
 class ProfileResponse(ProfileBase):
     id: uuid.UUID
     user_id: uuid.UUID
+    interview_plan: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
 

@@ -14,6 +14,7 @@ from app.prompts.interviewer import (
 )
 from app.db.session import SessionLocal
 from app.models.profile import CandidateProfile
+from app.services.question_research import research_notes_for_session
 from app.services.resume_service import search_matching_chunks
 
 
@@ -47,15 +48,13 @@ def _get_resume_context(session: dict) -> str:
         
         query = " ".join(focus_areas) if focus_areas else session.get("target_role", "")
         chunks = search_matching_chunks(db, profile.id, query, limit=2)
-        if not chunks:
-            return ""
-            
-        context = "\n\nCandidate's Resume Excerpts (use these to customize questions and ask about specific projects/technologies mentioned):\n"
-        for i, chunk in enumerate(chunks, 1):
-            context += f"Excerpt {i}: {chunk}\n"
-        context += "Refer to these resume details naturally when starting or probing, but do not list or recite them directly.\n"
-        
-        # Inject custom Architect-designed tailored questions if available
+        context = ""
+        if chunks:
+            context = "\n\nCandidate's Resume Excerpts (use these to customize questions and ask about specific projects/technologies mentioned):\n"
+            for i, chunk in enumerate(chunks, 1):
+                context += f"Excerpt {i}: {chunk}\n"
+            context += "Refer to these resume details naturally when starting or probing, but do not list or recite them directly.\n"
+
         if profile.interview_plan and isinstance(profile.interview_plan, dict):
             plan = profile.interview_plan
             tailored_qs = plan.get("tailored_questions")
@@ -65,7 +64,19 @@ def _get_resume_context(session: dict) -> str:
                 for i, q in enumerate(tailored_qs, 1):
                     context += f" - Blueprint Question {i}: {q}\n"
                 context += "Steer the interview questions toward these project claims and ask the candidate to elaborate on them.\n"
-                
+
+            experience = plan.get("experience")
+            if isinstance(experience, dict):
+                opening = experience.get("opening_script")
+                pacing = experience.get("pacing_notes")
+                follow_up = experience.get("follow_up_style")
+                if opening:
+                    context += f"\nExperience Architect opening: {opening}\n"
+                if pacing:
+                    context += f"Pacing: {pacing}\n"
+                if follow_up:
+                    context += f"Follow-up style: {follow_up}\n"
+
         return context
     except Exception:
         return ""
@@ -103,7 +114,9 @@ def build_interviewer_messages(state: AgentState) -> list:
         agent_prompt = TECHNICAL_AGENT_PROMPT.format(**labels)
         
     resume_context = _get_resume_context(state["session"])
-    system = SystemMessage(content=agent_prompt + resume_context)
+    research_notes = state.get("research_notes") or ""
+    research_block = f"\n\n{research_notes}\nUse these as inspiration, then ask one original question." if research_notes else ""
+    system = SystemMessage(content=agent_prompt + resume_context + research_block)
 
 
     if turn_number == 1 and not prior:
@@ -126,6 +139,11 @@ def stream_interviewer_tokens(state: AgentState):
         text = chunk.content
         if text:
             yield text
+
+
+def researcher_node(state: AgentState) -> dict:
+    notes = research_notes_for_session(state["session"])
+    return {"research_notes": notes}
 
 
 def interviewer_node(state: AgentState) -> dict:

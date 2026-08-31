@@ -58,6 +58,27 @@ async function apiFetch<T>(endpoint: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface InterviewPlan {
+  suggested_role?: string;
+  suggested_difficulty?: Difficulty;
+  recommended_focus_areas?: string[];
+  tailored_questions?: string[];
+  projects?: Array<{
+    name: string;
+    challenge: string;
+    tech_stack: string[];
+    outcomes: string;
+  }>;
+  experience?: {
+    session_arc?: string;
+    opening_script?: string;
+    pacing_notes?: string;
+    follow_up_style?: string;
+    camera_presence_tips?: string[];
+    round_structure?: string[];
+  };
+}
+
 export interface ProfileResponse {
   id: string;
   user_id: string;
@@ -69,6 +90,7 @@ export interface ProfileResponse {
   skills: string[];
   linkedin_url: string | null;
   github_url: string | null;
+  interview_plan?: InterviewPlan | null;
   created_at: string;
   updated_at: string;
 }

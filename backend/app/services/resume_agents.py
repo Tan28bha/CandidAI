@@ -1,8 +1,9 @@
 import logging
-from typing import List, Optional
+from typing import List
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.llm import get_chat_model
+from app.services.experience_agent import design_interview_experience
 
 logger = logging.getLogger("resume_agents")
 
@@ -33,6 +34,21 @@ class InterviewDesign(BaseModel):
     suggested_difficulty: str = Field(description="Suggested difficulty level (junior, mid, or senior).")
     recommended_focus_areas: List[str] = Field(description="Top 3 technical focus areas to evaluate (e.g. React Hooks, Redis Caching, DB Indexes).")
     tailored_questions: List[str] = Field(description="3 custom behavioral/technical questions specifically testing the candidate on their resume project claims and tech choices.")
+
+
+KNOWN_SKILLS = [
+    "React", "Python", "TypeScript", "JavaScript", "Node.js", "FastAPI", "Django",
+    "PostgreSQL", "Redis", "AWS", "Docker", "Kubernetes", "GraphQL", "SQL",
+    "Java", "Go", "Kafka", "Next.js", "LangGraph", "TensorFlow",
+]
+
+
+def extract_resume_without_llm(text: str) -> dict:
+    """Lightweight resume parse used when no LLM key is configured."""
+    lower = text.lower()
+    skills = [skill for skill in KNOWN_SKILLS if skill.lower() in lower]
+    bio = " ".join(text.split())[:280]
+    return {"skills": skills, "bio": bio}
 
 
 def run_resume_analysis_agents(text: str) -> dict:
@@ -88,8 +104,20 @@ def run_resume_analysis_agents(text: str) -> dict:
         HumanMessage(content=architect_input)
     ])
     
+    experience = design_interview_experience(
+        interview_type="technical",
+        target_role=design_result.suggested_role or profile_result.current_title,
+        difficulty=design_result.suggested_difficulty or "mid",
+        focus_areas=design_result.recommended_focus_areas,
+        resume_profile={
+            "current_title": profile_result.current_title,
+            "skills": profile_result.skills,
+        },
+        projects=[p.model_dump() for p in project_result.projects],
+    )
+
     logger.info("Multi-agent resume analysis completed successfully.")
-    
+
     return {
         "profile": {
             "current_title": profile_result.current_title,
@@ -103,5 +131,7 @@ def run_resume_analysis_agents(text: str) -> dict:
             "suggested_difficulty": design_result.suggested_difficulty,
             "recommended_focus_areas": design_result.recommended_focus_areas,
             "tailored_questions": design_result.tailored_questions,
-        }
+            "projects": [p.model_dump() for p in project_result.projects],
+            "experience": experience,
+        },
     }

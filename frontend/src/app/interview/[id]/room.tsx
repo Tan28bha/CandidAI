@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState, useRef } from "react";
-import { getInterview, InterviewDetail, startInterview } from "../../../lib/api";
+import { getInterview, getProfile, InterviewDetail, ProfileResponse, startInterview, submitAnswer } from "../../../lib/api";
+import CameraPanel from "../../../components/CameraPanel";
+import ResumeInsights from "../../../components/ResumeInsights";
 
 function TypewriterText({ text, speed = 8 }: { text: string; speed?: number }) {
   const [displayedText, setDisplayedText] = useState("");
@@ -64,6 +66,7 @@ declare global {
 
 export default function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [session, setSession] = useState<InterviewDetail | null>(null);
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(true);
@@ -88,7 +91,11 @@ export default function InterviewRoom({ interviewId }: { interviewId: string }) 
         const storedToken = localStorage.getItem("interview_access_token");
         if (!storedToken) throw new Error("Your session has expired. Return home to create or sign in.");
         setToken(storedToken);
-        const existingSession = await getInterview(storedToken, interviewId);
+        const [existingSession, candidateProfile] = await Promise.all([
+          getInterview(storedToken, interviewId),
+          getProfile(storedToken).catch(() => null),
+        ]);
+        if (candidateProfile) setProfile(candidateProfile);
         
         const finalSession = existingSession.status === "READY"
           ? await startInterview(storedToken, interviewId)
@@ -235,7 +242,6 @@ export default function InterviewRoom({ interviewId }: { interviewId: string }) 
     setError(null);
 
     if (socketConnected && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      // Send via WebSocket for live streaming updates
       socketRef.current.send(
         JSON.stringify({
           type: "submit_answer",
@@ -243,8 +249,19 @@ export default function InterviewRoom({ interviewId }: { interviewId: string }) 
         })
       );
       setAnswer("");
+    } else if (token) {
+      void (async () => {
+        try {
+          const result = await submitAnswer(token, interviewId, answer.trim());
+          setSession(result.session);
+          setAnswer("");
+        } catch (requestError) {
+          setError(requestError instanceof Error ? requestError.message : "Unable to submit this answer.");
+        } finally {
+          setSending(false);
+        }
+      })();
     } else {
-      // Direct error fallback
       setError("Not connected to live interview server. Please refresh.");
       setSending(false);
     }
@@ -274,7 +291,15 @@ export default function InterviewRoom({ interviewId }: { interviewId: string }) 
       </header>
 
       {/* Main Grid */}
-      <section className="mx-auto grid max-w-5xl gap-6 px-6 py-8 lg:grid-cols-[1fr_300px]">
+      <section className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[260px_1fr_300px]">
+        <div className="space-y-4">
+          <CameraPanel tips={profile?.interview_plan?.experience?.camera_presence_tips} />
+          {profile?.interview_plan?.experience?.opening_script && !isComplete && (
+            <p className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-3 text-[11px] leading-5 text-cyan-100">
+              {profile.interview_plan.experience.opening_script}
+            </p>
+          )}
+        </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">Live practice room</p>
           <h1 className="mt-2 text-2xl font-bold">{session.target_role} Interview</h1>
@@ -376,7 +401,8 @@ export default function InterviewRoom({ interviewId }: { interviewId: string }) 
         </div>
 
         {/* Sidebar Notes & History */}
-        <aside className="rounded-3xl border border-slate-800 bg-slate-900/30 p-5 backdrop-blur h-fit">
+        <aside className="space-y-4">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/30 p-5 backdrop-blur h-fit">
           <h2 className="text-sm font-bold text-slate-300">Question Reviews</h2>
           <div className="mt-4 space-y-4 max-h-[480px] overflow-y-auto pr-1">
             {answeredTurns.length === 0 ? (
@@ -398,6 +424,8 @@ export default function InterviewRoom({ interviewId }: { interviewId: string }) 
 
             )}
           </div>
+          </div>
+          <ResumeInsights profile={profile} />
         </aside>
       </section>
     </main>

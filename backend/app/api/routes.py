@@ -1,10 +1,8 @@
-import json
 import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
-from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.api.deps import get_current_user
 from app.core.config import settings
@@ -17,9 +15,10 @@ from app.schemas.profile import ProfileResponse, ProfileUpdate
 from app.schemas.user import Token, UserLogin, UserRegister, UserResponse
 from app.services.interview_engine import question_for
 from app.services.interview_helpers import get_owned_interview, submit_turn
+from app.services.experience_agent import design_interview_experience
 from app.services.resume_service import extract_text_from_pdf, chunk_text, generate_embeddings_for_chunks, save_resume_chunks
-from app.services.resume_agents import run_resume_analysis_agents
-from app.llm.provider import get_chat_model, llm_available
+from app.services.resume_agents import extract_resume_without_llm, run_resume_analysis_agents
+from app.llm.provider import llm_available
 from app.utils.security import create_access_token, hash_password, verify_password
 
 
@@ -133,6 +132,27 @@ async def upload_resume(
             db.refresh(profile)
         except Exception as exc:
             logger.warning("Failed to auto-enrich candidate profile from resume: %s", exc)
+    else:
+        heuristic = extract_resume_without_llm(text)
+        if heuristic.get("skills"):
+            profile.skills = heuristic["skills"]
+        if heuristic.get("bio") and not profile.bio:
+            profile.bio = heuristic["bio"]
+        profile.interview_plan = {
+            "suggested_role": profile.current_title or "Software Engineer",
+            "suggested_difficulty": "mid",
+            "recommended_focus_areas": heuristic.get("skills", [])[:4],
+            "tailored_questions": [],
+            "projects": [],
+            "experience": design_interview_experience(
+                interview_type="technical",
+                target_role=profile.current_title or "Software Engineer",
+                difficulty="mid",
+                focus_areas=heuristic.get("skills") or [],
+            ),
+        }
+        db.commit()
+        db.refresh(profile)
             
     return profile
 
